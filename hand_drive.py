@@ -15,8 +15,11 @@ MIDDLE_MCP, MIDDLE_PIP, MIDDLE_DIP, MIDDLE_TIP = 9, 10, 11, 12
 RING_MCP, RING_PIP, RING_DIP, RING_TIP = 13, 14, 15, 16
 PINKY_MCP, PINKY_PIP, PINKY_DIP, PINKY_TIP = 17, 18, 19, 20
 
-def ema(prev, new, alpha=0.25):
-    return alpha*new + (1-alpha)*prev
+def val_gap(prev, new, gap=0.05):
+    if abs(new - prev) < gap:
+        return prev
+    else:
+        return new
 
 def clamp(v, lo, hi):
     return max(lo, min(hi, v))
@@ -154,8 +157,8 @@ class DriveState:
             return None
 
     def set_speed_dir(self, spd, direc):
-        self._f_speed = ema(self._f_speed, spd, 0.25)
-        self._f_dir   = ema(self._f_dir,   direc, 0.25)
+        self._f_speed = val_gap(self._f_speed, spd)
+        self._f_dir   = val_gap(self._f_dir,   direc)
         self.speed = clamp(self._f_speed, -1, 1)
         self.direction = clamp(self._f_dir, -1, 1)
 
@@ -250,35 +253,49 @@ def main():
                 draw_progress_bar(frame, bar_x, bar_y, bar_w, bar_h, p_disp, color=bar_color)
 
 
-                # --- LEFT: speed from openness + facing (palm vs back) ---
+                # --- Compute raw speed & direction first ---
                 spd_raw = 0.0
+                dir_raw = 0.0
                 speed_y = h - 50
+                dir_y   = h - 20
+
+                # LEFT: speed from openness + facing (palm vs back)
                 if left:
                     lmL = left[0].landmark
                     spd_raw, _, _, _ = speed_from_left_openness_facing(lmL, state)
-                    cv2.putText(frame, f"Speed = {spd_raw:+.2f}",
-                                (20, speed_y), font, 0.7, (255, 0, 0), 2)  # blue
-                else:
-                    cv2.putText(frame, "Speed = N/A (no left hand)",
-                                (20, speed_y), font, 0.7, (255, 0, 0), 2)  # blue
 
-                # --- RIGHT: direction from fist roll (gate with simple fist) ---
-                dir_raw = 0.0
-                dir_y = h - 20
+                # RIGHT: direction from fist roll (gate with simple fist)
+                right_is_fist = False
                 if right:
                     lmR = right[0].landmark
                     if right_is_fist_simple(lmR):
+                        right_is_fist = True
                         dir_raw, _ = direction_from_right_fist_roll(lmR)
-                        cv2.putText(frame, f"Direction = {dir_raw:+.2f}",
+                    else:
+                        dir_raw = 0.0  # on ramène vers tout droit
+
+                # --- Update filtered state (with gap) ---
+                state.set_speed_dir(spd_raw, dir_raw)
+
+                # --- Display filtered values ---
+                if left:
+                    cv2.putText(frame, f"Speed = {state.speed:+.2f}",
+                                (20, speed_y), font, 0.7, (255, 0, 0), 2)  # blue
+                else:
+                    cv2.putText(frame, "Speed = N/A (no left hand)",
+                                (20, speed_y), font, 0.7, (255, 0, 0), 2)
+
+                if right:
+                    if right_is_fist:
+                        cv2.putText(frame, f"Direction = {state.direction:+.2f}",
                                     (20, dir_y), font, 0.7, (0, 255, 255), 2)  # yellow
                     else:
                         cv2.putText(frame, "Direction = 0.00 (right not fist)",
-                                    (20, dir_y), font, 0.7, (0, 255, 255), 2)  # yellow
+                                    (20, dir_y), font, 0.7, (0, 255, 255), 2)
                 else:
                     cv2.putText(frame, "Direction = N/A (no right hand)",
-                                (20, dir_y), font, 0.7, (0, 255, 255), 2)      # yellow
+                                (20, dir_y), font, 0.7, (0, 255, 255), 2)
 
-                state.set_speed_dir(spd_raw, dir_raw)
 
             else:
                 # No hands at all: still show status bar + placeholders
