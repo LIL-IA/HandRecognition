@@ -484,6 +484,10 @@ def main():
             hands_ok = (left is not None) and (right is not None)
             lost_active = state.handle_visibility(hands_ok, dt)
 
+            # If both hands disappear for long enough, queue a recalibration to re-lock origin
+            if lost_active and left is None and right is None and not state.calib_requested:
+                state.calib_requested = True
+
             metrics = None
             info = {}
             calib_info = {'calibrating': False, 'progress': 0.0, 'calibrated_now': False}
@@ -518,10 +522,16 @@ def main():
             if calib_info.get('calibrating'):
                 ptxt = f"Calibrating origin... {int(calib_info.get('progress',0)*100):02d}%"
                 cv2.putText(frame, ptxt, (20, h-100), font, 0.6, (0, 200, 0), 2)
+            elif state.calib_requested and not state.calibrating:
+                cv2.putText(frame, "Auto recalibration pending: show both hands and hold still",
+                            (20, h-100), font, 0.6, (0, 165, 255), 2)
             elif state.baseline is None:
                 cv2.putText(frame, "Hold still or press 'C' to set origin", (20, h-100), font, 0.6, (0, 165, 255), 2)
             elif lost_active:
-                cv2.putText(frame, "SAFE STOP (hands lost)", (20, h-100), font, 0.6, (0, 0, 255), 2)
+                msg = "SAFE STOP (hands lost)"
+                if state.calib_requested:
+                    msg += " - auto recalibration will start when hands return"
+                cv2.putText(frame, msg, (20, h-100), font, 0.6, (0, 0, 255), 2)
             elif not hands_ok:
                 cv2.putText(frame, "Need both hands visible", (20, h-100), font, 0.6, (0, 165, 255), 2)
 
