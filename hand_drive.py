@@ -3,7 +3,7 @@ import math
 import cv2
 import numpy as np
 import mediapipe as mp
-
+#TODO add hand open detection for recalibration and safety stop if one of the hands are not oppen or losed. A new recalibration will be needed.
 # -------- MediaPipe setup --------
 mp_hands = mp.solutions.hands
 mp_draw  = mp.solutions.drawing_utils
@@ -14,12 +14,6 @@ INDEX_MCP, INDEX_PIP, INDEX_DIP, INDEX_TIP = 5, 6, 7, 8
 MIDDLE_MCP, MIDDLE_PIP, MIDDLE_DIP, MIDDLE_TIP = 9, 10, 11, 12
 RING_MCP, RING_PIP, RING_DIP, RING_TIP = 13, 14, 15, 16
 PINKY_MCP, PINKY_PIP, PINKY_DIP, PINKY_TIP = 17, 18, 19, 20
-
-def val_gap(prev, new, gap=0.05):
-    if abs(new - prev) < gap:
-        return prev
-    else:
-        return new
 
 def clamp(v, lo, hi):
     return max(lo, min(hi, v))
@@ -146,19 +140,6 @@ def palm_facing_sign(lm):
     return 0, dz
 
 # -------- Right-hand steering --------
-def direction_from_right_fist_roll(lm):
-    a = lm[INDEX_MCP]; b = lm[PINKY_MCP]
-    dx = (b.x - a.x); dy = (b.y - a.y)
-    ang_deg = math.degrees(math.atan2(dy, dx))
-    ang_deg = ((ang_deg - 90.0 + 180.0) % 360.0) - 180.0
-    ang_deg_clamped = clamp(ang_deg, -50.0, 50.0)
-    val = deadzone(ang_deg_clamped / 50.0, 4.0/50.0)
-    return clamp(val, -1.0, 1.0), ang_deg
-
-def right_is_fist_simple(lm):
-    curls = [_curl_pip_deg(lm, fids) for fids in (INDEX, MIDDLE, RING, PINKY)]
-    return sum(1 for c in curls if c >= 45.0) >= 3
-
 # -------- State --------
 class DriveState:
     def __init__(self):
